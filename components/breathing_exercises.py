@@ -272,9 +272,7 @@ def render_mindfulness_exercises():
         [
             "5-4-3-2-1 Grounding",
             "Body Scan Meditation",
-            "Mindful Observation",
-            "Loving-Kindness Meditation",
-            "Progressive Muscle Relaxation"
+            "Mindful Observation"
         ]
     )
     
