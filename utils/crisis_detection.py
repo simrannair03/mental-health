@@ -1,23 +1,40 @@
+# utils/crisis_detection.py
+
 import re
 import streamlit as st # type: ignore
-from utils.mistral_client import MistralAIClient # type: ignore
+from utils.gemini_client import GeminiClient # 🌟 CHANGE: Import the new GeminiClient
 from data.crisis_keywords import CRISIS_KEYWORDS, SEVERITY_WEIGHTS
 
 class CrisisDetector:
     def __init__(self):
-        # Correctly initialize the MistralAIClient
-        self.mistral_client = MistralAIClient() 
+        # 🌟 CHANGE: Initialize the GeminiClient
+        # Note: In the Streamlit flow, this client should already be initialized
+        # via st.session_state.gemini_client, but we'll instantiate one here
+        # to ensure the method call works, or we will modify the calling component.
+        # Since this class is instantiated in chat_interface.py, we rely on the
+        # calling context, but for a standalone fix, we'll try to use the client.
+        try:
+            self.gemini_client = GeminiClient()
+        except Exception:
+            # Fallback if the client can't be created here
+            self.gemini_client = None 
+
         self.crisis_keywords = CRISIS_KEYWORDS
         self.severity_weights = SEVERITY_WEIGHTS
-    
+        
     def analyze_text_for_crisis(self, text):
         """Multi-layered crisis detection system"""
         
         # Layer 1: Keyword-based detection
         keyword_risk = self._keyword_based_detection(text)
         
-        # Layer 2: AI-powered sentiment and risk analysis (using Mistral)
-        ai_analysis = self.mistral_client.analyze_sentiment_and_risk(text)
+        # Layer 2: AI-powered sentiment and risk analysis (using Gemini)
+        if self.gemini_client:
+            # 🌟 CHANGE: Use the GeminiClient's dedicated crisis analysis method
+            ai_analysis = self.gemini_client.analyze_text_for_crisis(text)
+        else:
+            # Fallback if client initialization failed
+            ai_analysis = {"risk_level": "LOW", "keywords_detected": [], "analysis": "AI client unavailable."}
         
         # Layer 3: Combined risk assessment
         combined_risk = self._combine_risk_assessments(keyword_risk, ai_analysis)
@@ -59,14 +76,22 @@ class CrisisDetector:
         # Risk level hierarchy: critical > high > moderate > low
         risk_levels = ["low", "moderate", "high", "critical"]
         
-        keyword_level_idx = risk_levels.index(keyword_risk["risk_level"])
-        ai_level_idx = risk_levels.index(ai_analysis["risk_level"])
+        # Safely get index, defaulting to low if risk_level is unexpected
+        try:
+            keyword_level_idx = risk_levels.index(keyword_risk["risk_level"])
+        except ValueError:
+            keyword_level_idx = risk_levels.index("low")
+            
+        try:
+            ai_level_idx = risk_levels.index(ai_analysis["risk_level"].lower()) # Ensure lowercase from AI
+        except ValueError:
+            ai_level_idx = risk_levels.index("low")
         
         # Take the higher risk level
         combined_level = risk_levels[max(keyword_level_idx, ai_level_idx)]
         
         # If either method detects critical risk, escalate immediately
-        if keyword_risk["risk_level"] == "critical" or ai_analysis["risk_level"] == "critical":
+        if keyword_risk["risk_level"] == "critical" or ai_analysis["risk_level"].lower() == "critical":
             combined_level = "critical"
         
         return {
@@ -84,7 +109,7 @@ class CrisisDetector:
             self._show_immediate_crisis_resources()
         elif risk_assessment["requires_intervention"]:
             self._show_support_resources()
-        
+            
         return risk_assessment["requires_intervention"]
     
     def _show_immediate_crisis_resources(self):
