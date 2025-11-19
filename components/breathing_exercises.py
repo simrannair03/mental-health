@@ -1,5 +1,6 @@
 import streamlit as st # type: ignore
 import time
+import pytz
 from datetime import datetime
 import plotly.graph_objects as go # type: ignore
 
@@ -475,11 +476,11 @@ def render_quick_calming():
     🧊 **Use your senses** - Hold something cold, smell something pleasant
     📱 **Call someone** - Reach out to a trusted person
     🏥 **Seek help** - If symptoms persist, contact a healthcare provider
-    🆘 **Crisis resources** - Call 988 or text HOME to 741741
+    🆘 **Crisis resources** - Call 112
     
     **Remember:** Panic attacks are temporary and will pass. You are safe.
     """)
-
+IST_TIMEZONE = pytz.timezone('Asia/Kolkata')
 def render_practice_tracking():
     """Track and display breathing/mindfulness practice history"""
     
@@ -521,10 +522,27 @@ def render_practice_tracking():
         reverse=True
     )[:10]
     
-    for session in recent_sessions:
-        timestamp = datetime.fromisoformat(session["timestamp"])
+    # for session in recent_sessions:
+    #     timestamp = datetime.fromisoformat(session["timestamp"])
         
-        with st.expander(f"{session['technique']} - {timestamp.strftime('%B %d, %Y at %I:%M %p')}"):
+    #     with st.expander(f"{session['technique']} - {timestamp.strftime('%B %d, %Y at %I:%M %p')}"):
+    #         col1, col2 = st.columns(2)
+    for session in recent_sessions:
+        # Convert the ISO string (assumed UTC) to a localized datetime object (IST)
+        # 1. Convert the ISO string to a naive datetime object
+        naive_timestamp = datetime.fromisoformat(session["timestamp"])
+        
+        # 2. Assume the naive time is UTC (common for ISO records)
+        utc_timestamp = naive_timestamp.replace(tzinfo=pytz.utc) 
+        
+        # 3. Convert UTC to IST
+        ist_timestamp = utc_timestamp.astimezone(IST_TIMEZONE) # 🌟 CHANGE: Timezone conversion
+        
+        # Format the IST time for display
+        display_time = ist_timestamp.strftime('%B %d, %Y at %I:%M %p IST') 
+        
+        # Use the converted time in the expander title
+        with st.expander(f"{session['technique']} - {display_time}"): # 🌟 CHANGE: Use display_time
             col1, col2 = st.columns(2)
             
             with col1:
