@@ -253,8 +253,7 @@ def render_common_challenges():
     • Calling a mental health helpline
     
     **Crisis Resources:**
-    • 988 - Suicide & Crisis Lifeline
-    • Text HOME to 741741 - Crisis Text Line
+    • 112 - Suicide & Crisis Lifeline
     """)
 
 def render_coping_strategies():
