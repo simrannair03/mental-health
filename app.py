@@ -39,7 +39,7 @@ st.markdown("""
 
 **Important Notice:** This chatbot is designed to provide support and self-help tools. 
 It is not a replacement for professional mental health care. If you're experiencing a mental health crisis, 
-please contact emergency services or call 988 (Suicide & Crisis Lifeline).
+please contact emergency services or call 112 (Suicide & Crisis Lifeline).
 """)
 
 # Sidebar navigation
@@ -73,11 +73,9 @@ page = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 st.sidebar.error("""
 🚨 **Crisis Resources**
-- **Emergency**: Call 911
-- **Crisis Text Line**: Text HOME to 741741
-- **Suicide Prevention**: Call 988
-- **Crisis Chat**: [suicidepreventionlifeline.org](https://suicidepreventionlifeline.org)
-""")
+- **Emergency**: Call 112
+- **Suicide Prevention**: Call 9152987821
+- **Crisis Chat**: 9999666555
 
 # Data management options
 st.sidebar.markdown("---")
