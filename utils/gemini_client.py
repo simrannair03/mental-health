@@ -1,147 +1,166 @@
-# utils/gemini_client.py
-
 import os
 import json
-from google import genai
-from google.genai import types
+import streamlit as st
+import google.generativeai as genai
+import time
+from google.genai.errors import ServerError
 
-# Define the model to use
-MODEL = 'gemini-2.5-flash'
+MODEL = "gemini-2.0-flash"
 
-# System Instruction for the main chat (Therapist Persona)
 BASE_SYSTEM_INSTRUCTION = """
-You are a compassionate, non-judgmental, and supportive mental wellness companion. 
-Your primary role is to listen empathetically, validate feelings, and provide evidence-based mental health support, 
-such as guided journaling, CBT principles, and breathing exercises.
-ALWAYS prioritize user safety. If the user expresses thoughts of self-harm or suicide,
-immediately and gently pivot to providing the crisis resources already listed in the prompt.
-NEVER provide diagnosis or claim to be a human professional.
-Keep responses concise, warm, and focused on the user's emotional state.
+You are a compassionate, non-judgmental, and supportive mental wellness companion.
+Your role is to listen empathetically, validate feelings, and offer grounding,
+journaling, CBT reflections and emotional support.
+
+You must NEVER give medical advice, diagnose, or pretend to be a human professional.
+Always prioritize safety, be warm, concise, and emotionally validating.
 """
 
-# Crisis Handling System Instruction
 CRISIS_INSTRUCTION = """
-You are a highly sensitive and empathetic crisis detection AI. Analyze the user's message 
-for themes related to self-harm, suicidal ideation, severe distress, or abuse.
-Your response MUST be a single JSON object.
+You are a crisis risk analysis AI.
 
-Example output if severe risk:
-{"risk_level": "SEVERE", "keywords_detected": ["kill myself", "end it all"], "analysis": "The user expresses immediate suicidal intent."}
-
-Example output if low risk:
-{"risk_level": "LOW", "keywords_detected": ["stressed", "sad"], "analysis": "The user is expressing general sadness and stress."}
-
-Risk Levels are: LOW, MODERATE, HIGH, SEVERE. 
-Focus your detection on identifying the presence of immediate danger or clear plans for self-harm.
+Return ONLY a JSON object:
+{
+ "risk_level": "LOW | MODERATE | HIGH | SEVERE",
+ "keywords_detected": [],
+ "analysis": "short reasoning"
+}
 """
 
 class GeminiClient:
-    def __init__(self):
-        """Initializes the Gemini client, picking up the API key from the environment."""
-        if "GEMINI_API_KEY" not in os.environ:
-            st.error("GEMINI_API_KEY not found. Please set the environment variable.")
-            self.client = None
-        else:
-            self.client = genai.Client()
+    def _init_(self):
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise EnvironmentError("❌ GEMINI_API_KEY not set.")
 
-    def _generate_content(self, model_name: str, contents, system_instruction: str, is_json: bool = False):
-        """Helper function to call the Gemini API."""
-        if not self.client:
-            raise Exception("Gemini client is not initialized. Check GEMINI_API_KEY.")
-        
-        config_params = {
-            "system_instruction": system_instruction,
-            "temperature": 0.7 if not is_json else 0.0 # Use low temp for JSON
-        }
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel(MODEL)
 
-        if is_json:
-            config_params["response_mime_type"] = "application/json"
-        
-        response = self.client.models.generate_content(
-            model=model_name,
-            contents=contents,
-            config=config_params
-        )
-        return response
+    # ------------------------------------------------------
+    # SAFE INTERNAL GEMINI CALL (retry + fallback)
+    # ------------------------------------------------------
+    def _generate(self, prompt, json_output=False, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                response = self.model.generate_content(
+                    prompt,
+                    generation_config={
+                        "response_mime_type": (
+                            "application/json" if json_output else "text/plain"
+                        )
+                    }
+                )
+                return response.text
 
-    def get_empathetic_response(self, user_input: str, persona: str, conversation_history: list) -> str:
-        """Generates a chat response based on user input, persona, and history."""
-        
-        persona_instructions = {
-            "peer": "Respond like a supportive, non-professional friend your own age.",
-            "mentor": "Respond like a guiding, encouraging, and experienced mentor.",
-            "therapist": "Respond like a gentle, non-directive, and empathetic therapist (without giving medical advice)."
-        }
-        
-        full_system_instruction = BASE_SYSTEM_INSTRUCTION + "\n\n" + persona_instructions.get(persona, persona_instructions['therapist'])
-        
-        # Format conversation history for Gemini API
-        gemini_history = []
-        for message in conversation_history:
-            role = "user" if message["role"] == "user" else "model"
-            gemini_history.append(types.Content(role=role, parts=[types.Part.from_text(message["content"])]))
-            
-        gemini_history.append(types.Content(role="user", parts=[types.Part.from_text(user_input)]))
-        
-        response = self._generate_content(
-            model_name=MODEL,
-            contents=gemini_history,
-            system_instruction=full_system_instruction
-        )
-        return response.text
+            except ServerError as e:
+                if "503" in str(e) or "overloaded" in str(e).lower():
+                    time.sleep(1.5)
+                    continue
+                raise e
 
-    def generate_cbt_insight(self, thought_record: dict) -> dict:
-        """Generates AI insights for a thought record."""
-        prompt = f"""
-        Analyze the following thought record and provide structured feedback.
-        Thought Record: {json.dumps(thought_record, indent=2)}
-        
-        Your response MUST be a single JSON object with the following keys:
-        - "cognitive_distortions": A list of potential cognitive distortions (e.g., ["All-or-Nothing Thinking", "Catastrophizing"])
-        - "balanced_thoughts": A list of 2-3 alternative, more balanced thoughts
-        - "encouragement": A short, empathetic encouraging message.
-        """
-        response = self._generate_content(
-            model_name=MODEL,
-            contents=prompt,
-            system_instruction="You are an expert CBT tool that analyzes text and returns a JSON object for therapy insights.",
-            is_json=True
-        )
-        return json.loads(response.text)
+            except Exception as e:
+                raise RuntimeError(f"Gemini request failed: {e}")
 
-    def generate_personalized_journal_prompt(self, mood_context: dict, recent_themes: list) -> dict:
-        """Generates a personalized journal prompt based on user data."""
-        prompt = f"""
-        Based on the user's recent data, create one highly relevant journal prompt and 2-3 follow-up questions.
-        Mood Context (Recent Average Mood, Common Emotions): {json.dumps(mood_context, indent=2)}
-        Recent Journal Themes: {recent_themes}
-        
-        The prompt should be designed to help the user explore the emotions or patterns identified in the context.
-        
-        Your response MUST be a single JSON object with the following keys:
-        - "prompt": The personalized journal prompt
-        - "follow_up_questions": A list of 2-3 specific follow-up questions for deeper reflection.
-        """
-        response = self._generate_content(
-            model_name=MODEL,
-            contents=prompt,
-            system_instruction="You are a creative, therapeutic AI that generates personalized journal prompts in JSON format.",
-            is_json=True
-        )
-        return json.loads(response.text)
-
-    def analyze_text_for_crisis(self, user_input: str) -> dict:
-        """Analyzes text for crisis indicators (Note: This is a placeholder for a dedicated model)."""
-        prompt = f"Analyze the following user input and determine the risk level (LOW, MODERATE, HIGH, SEVERE) and relevant keywords. User Input: {user_input}"
-        
-        response = self._generate_content(
-            model_name=MODEL,
-            contents=prompt,
-            system_instruction=CRISIS_INSTRUCTION,
-            is_json=True
-        )
+        # Fallback model
         try:
-            return json.loads(response.text)
-        except json.JSONDecodeError:
-            # Fallback if the model doesn't return perfect JSON
-            return {"risk_level": "MODERATE", "keywords_detected": ["system_error"], "analysis": "Could not parse AI crisis response."}
+            fallback = genai.GenerativeModel("gemini-1.5-flash")
+            response = fallback.generate_content(
+                prompt,
+                generation_config={
+                    "response_mime_type": (
+                        "application/json" if json_output else "text/plain"
+                    )
+                }
+            )
+            return response.text
+
+        except:
+            return None
+
+    # ------------------------------------------------------
+    # NORMAL EMPATHETIC CHAT
+    # ------------------------------------------------------
+    def get_empathetic_response(self, user_input, persona, conversation_history):
+        personas = {
+            "peer": "Respond like a warm, supportive peer listener.",
+            "mentor": "Respond like a kind, encouraging mentor.",
+            "therapist": "Respond like a gentle therapeutic companion (no diagnosis)."
+        }
+
+        persona_text = personas.get(persona, personas["therapist"])
+
+        chat_text = ""
+        for msg in conversation_history[-10:]:
+            chat_text += f"{msg['role'].upper()}: {msg['content']}\n"
+
+        chat_text += f"USER: {user_input}"
+
+        full_prompt = f"""
+{BASE_SYSTEM_INSTRUCTION}
+
+Persona style: {persona_text}
+
+Conversation history:
+{chat_text}
+
+Respond empathically, briefly, and safely.
+"""
+
+        reply = self._generate(full_prompt)
+        return reply or "I'm here with you — could you share a little more?"
+
+    # ------------------------------------------------------
+    # CBT JSON INSIGHT
+    # ------------------------------------------------------
+    def generate_cbt_insight(self, thought_record: dict) -> dict:
+        prompt = f"""
+Return a JSON object with ONLY:
+- cognitive_distortions
+- balanced_thoughts
+- encouragement
+
+Here is the user's CBT thought record:
+{json.dumps(thought_record, indent=2)}
+"""
+        raw = self._generate(prompt, json_output=True)
+        try:
+            return json.loads(raw)
+        except:
+            return {"error": "Failed to parse CBT JSON."}
+
+    # ------------------------------------------------------
+    # JOURNAL PROMPT JSON
+    # ------------------------------------------------------
+    def generate_personalized_journal_prompt(self, mood_context, recent_themes):
+        prompt = f"""
+Return a JSON object with:
+- prompt
+- follow_up_questions
+
+Mood context:
+{json.dumps(mood_context, indent=2)}
+
+Themes: {recent_themes}
+"""
+        raw = self._generate(prompt, json_output=True)
+        try:
+            return json.loads(raw)
+        except:
+            return {"error": "Failed to parse journal prompt JSON."}
+
+    # ------------------------------------------------------
+    # CRISIS DETECTION JSON
+    # ------------------------------------------------------
+    def analyze_text_for_crisis(self, user_input: str):
+        prompt = f"{CRISIS_INSTRUCTION}\n\nUser message: {user_input}"
+
+        raw = self._generate(prompt, json_output=True)
+
+        try:
+            return json.loads(raw)
+        except:
+            return {
+                "risk_level": "MODERATE",
+                "keywords_detected": [],
+                "analysis": "Could not parse AI JSON."
+            }
