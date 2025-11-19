@@ -128,12 +128,12 @@ elif page == "⚙️ Privacy Settings":
     st.subheader("Privacy Information")
     st.markdown("""
     **How we protect your privacy:**
-    - ✅ No personal information collected
-    - ✅ Anonymous session IDs only
-    - ✅ Data encrypted at rest
-    - ✅ No tracking across sessions
-    - ✅ Complete data deletion available
-    - ✅ No data sharing with third parties
+    - "✅ No personal information collected"
+    - "✅ Anonymous session IDs only"
+    - "✅ Data encrypted at rest"
+    - "✅ No tracking across sessions"
+    - "✅ Complete data deletion available"
+    - "✅ No data sharing with third parties"
     
     **Data we collect:**
     - Mood ratings and journal entries (if you choose to save them)
