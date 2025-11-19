@@ -76,7 +76,7 @@ st.sidebar.error("""
 🚨 **Crisis Resources**
 - **Emergency**: Call 112
 - **Suicide Prevention**: Call 9152987821
-- **Crisis Chat**: 9999666555
+- **Crisis Chat**: 9999666555""")
 
 # Data management options
 st.sidebar.markdown("---")
@@ -151,6 +151,6 @@ elif page == "⚙️ Privacy Settings":
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; font-size: 0.8em;'>
-Remember: You're not alone. Taking care of your mental health is a sign of strength.
+❤️Remember: You're not alone. Taking care of your mental health is a sign of strength.
 </div>
 """, unsafe_allow_html=True)
