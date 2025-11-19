@@ -140,7 +140,7 @@ elif page == "⚙️ Privacy Settings":
     - Chat messages for providing better support
     - Usage patterns to improve the service
     
-    **Data we DON'T collect:**
+    **Data we DONT collect:**
     - Name, email, or any personal identifiers
     - Location data
     - Device information beyond basic browser data
